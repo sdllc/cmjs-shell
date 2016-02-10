@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>demo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.11.0/codemirror.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.11.0/theme/zenburn.css"/>
+    <style>
+
+#shell-container {
+  width: 600px;
+  height: 400px;
+  border: 1px solid gray;
+  margin: 0 auto;
+  position: relative;
+}
+
+#shell-container .CodeMirror {
+  height: 100%;
+  width: 100%;
+  font-family: consolas, 'ubuntu mono', monospace;
+  font-size: 10pt;
+}
+
+.shell-error {
+  background: red;
+  color: white !important;
+}
+
+.banner {
+  color: white !important;
+}
+
+    </style>
+  </head>
+<body>
+  <div id='shell-container'></div>
+
+</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.11.0/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.11.0/mode/javascript/javascript.min.js"></script>
+<script src="https://cdn.rawgit.com/jquery/esprima/2.7.1/esprima.js"></script>
+
+<!-- polyfill: https://github.com/YuzuJS/setImmediate/blob/master/setImmediate.js -->
+<script src="setImmediate.js"></script>
+
+<script src="../shell.js"></script>
+<script>
+
+  /**
+   * this is our interpreter.  note that writing responses to the shell
+   * is decoupled from commands -- the result of this function (via callback)
+   * only affects display of the prompt.
+   */
+  function exec( cmd, callback ){
+    var ps = shell.PARSE_STATUS.OK;
+    if( cmd.length ){
+      var composed = cmd.join( "\n" );
+      try { esprima.parse( composed ); }
+      catch( e ){
+        if( e.description.match( /Unexpected end of input/ )){
+          ps = shell.PARSE_STATUS.INCOMPLETE;
+        }
+      }
+      if( ps == shell.PARSE_STATUS.OK ){
+        try {
+          var text, rslt = window.eval(composed);
+          try { text = JSON.stringify( rslt ); }
+          catch( e ){ text = rslt.toString(); }
+          shell.response( text );
+        } catch( e ) {
+          shell.response( e.name + ": " + e.message, "shell-error" );
+        }
+      }
+    }
+    callback.call( this, { parsestatus: ps });
+  }
+
+  /** one overloaded global method */
+  window.print = function(a){ shell.response( JSON.stringify(a) ); }
+
+  /**
+   * this is the shell constructor
+   */
+  var shell = new Shell( CodeMirror, {
+    container: '#shell-container',
+    mode: 'javascript',
+    exec_function: exec
+  });
+
+  /**
+   * set up style and focus
+   */
+  shell.setOption( "theme", "zenburn" );
+  shell.focus();
+
+  var banner =
+  "                  _           _          _ _ \n" +
+  "                 (_)         | |        | | |\n" +
+  "    ___ _ __ ___  _ ___   ___| |__   ___| | |\n" +
+  "   / __| '_ ` _ \\| / __| / __| '_ \\ / _ \\ | |\n" +
+  "  | (__| | | | | | \\__ \\ \\__ \\ | | |  __/ | |\n" +
+  "   \\___|_| |_| |_| |___/ |___/_| |_|\\___|_|_|\n" +
+  "                _/ |                         \n" +
+  "               |__/                          \n" +
+  "\n" +
+  "  This is a demo of cmjs-shell.  It's not really intended for browsers\n" +
+  "  (it was built for electron), but it should work ok.  Here there's a\n" +
+  "  javascript interpreter provided for test purposes.  Enjoy!\n\n";
+
+
+  shell.response( banner, "banner" );
+
+</script>
+</html>
