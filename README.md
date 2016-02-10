@@ -22,12 +22,16 @@ Demo
 
 The shell was built for [electron][2], but it works in modern browsers.
 
+[Demo][3]
+
+
 License
 -------
 
-[MIT][3].
+[MIT][4].
 
 
 [1]: http://codemirror.net
 [2]: http://electron.atom.io/
-[3]: https://opensource.org/licenses/MIT
+[3]: http://sdllc.github.io/cmjs-shell/demo/
+[4]: https://opensource.org/licenses/MIT
