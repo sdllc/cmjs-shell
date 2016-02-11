@@ -106,7 +106,6 @@ var Shell = function( CodeMirror_, opts ){
 			opts = opts || {};
 			var key = opts.key || HISTORY_KEY_DEFAULT;
 			var val = localStorage.getItem(key);
-			console.info( val );
 			if( val ) this.actual_commands = JSON.parse( val );
 			this.reset_pointer();
 		}
