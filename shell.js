@@ -70,6 +70,7 @@ var Shell = function( CodeMirror_, opts ){
 
 	var command_buffer = [];
 	var paste_buffer = [];
+	var blinking = true;
 
 	/**
 	 * FIXME: cap and flush this thing at (X) number of lines
@@ -430,6 +431,14 @@ var Shell = function( CodeMirror_, opts ){
 			local_hint_function.async = true;
 		}
 
+		cm.on( "cursorActivity", function(cm, e){
+			var pos = cm.getCursor();
+			if( pos.line !== cm.getDoc().lastLine() || pos.ch < prompt.length ){
+				cm.setOption( "cursorBlinkRate", 0 );
+			}		
+			else cm.setOption( "cursorBlinkRate", 530 );
+		});
+				
 		cm.on( "beforeChange", function(cm, e){
 
 			// todo: split paste into separate lines,
