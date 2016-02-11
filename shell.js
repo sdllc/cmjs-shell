@@ -41,6 +41,10 @@ var PARSE_STATUS = {
 	ERR: "Err"
 };
 
+const MAX_HISTORY_DEFAULT = 2500;
+
+const HISTORY_KEY_DEFAULT = "shell.history";
+
 /**
  * shell implmentation based on CodeMirror (which is awesome)
  * see http://codemirror.net/.
@@ -89,7 +93,24 @@ var Shell = function( CodeMirror_, opts ){
 		push: function( line ){
 			this.actual_commands.push( line );
 			this.commands = this.actual_commands.slice(0);
+		},
+		
+		save: function(opts){
+			opts = opts || {};
+			var max = opts.max || MAX_HISTORY_DEFAULT;
+			var key = opts.key || HISTORY_KEY_DEFAULT;
+			localStorage.setItem( key, JSON.stringify( this.actual_commands.slice(0, max)));
+		},
+		
+		restore: function(opts){
+			opts = opts || {};
+			var key = opts.key || HISTORY_KEY_DEFAULT;
+			var val = localStorage.getItem(key);
+			console.info( val );
+			if( val ) this.actual_commands = JSON.parse( val );
+			this.reset_pointer();
 		}
+		
 
 	};
 
@@ -99,9 +120,16 @@ var Shell = function( CodeMirror_, opts ){
 	};
 
 	/**
+	 * get history as array 
+	 */
+	this.get_history = function(){
+		return history.actual_commands.slice(0);
+	};
+
+	/**
 	 * insert an arbitrary node, via CM's widget
 	 */
-	this.insertNode = function(node){
+	this.insert_node = function(node){
 
 		var doc = cm.getDoc();
 		var line = Math.max( doc.lastLine() - 1, 0 );
@@ -225,7 +253,12 @@ var Shell = function( CodeMirror_, opts ){
 		// the container can just do nothing on an empty command, if it
 		// wants to, but it might want to know about it.
 
-		if( command.trim().length > 0 ) history.push(command);
+		if( command.trim().length > 0 ){
+			
+			history.push(command);
+			history.save(); // this is perhaps unecessarily aggressive
+			
+		} 
 
 		// this automatically resets the pointer (NOT windows style)
 
@@ -566,6 +599,9 @@ var Shell = function( CodeMirror_, opts ){
 			}
 
 		});
+
+		// FIXME: optional
+		history.restore();
 
 		// expose the options object
 		instance.opts = opts;
