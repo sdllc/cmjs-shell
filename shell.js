@@ -170,17 +170,32 @@ var Shell = function( CodeMirror_, opts ){
 			ch -= prompt_len;
 			if( ch < 0 ) ch = 0; // how can that happen?
 		}
+
+		// second cut, a little more thorough
 		
-		// TEMP only (shortcut)
+		var lastindex, lines = text.split( "\n" );
 		var replace_end = undefined;
-		if( text.startsWith( "\r" )){
-			text = text.substring(1);
+		var inline_replacement = false;
+		
+		text = "";
+		
+		for( var i = 0; i< lines.length; i++ ){
+			
+			lastindex = lines[i].lastIndexOf('\r');
+			
+			if( i ) text += "\n";
+			else if( lastindex >= 0 ) inline_replacement = true;
+			
+			if (lastindex >= 0 ) {
+				text += lines[i].substring( lastindex + 1 );
+			}
+			else text += lines[i];
+		}
+		
+		if( inline_replacement ){
 			replace_end = { line: start, ch: ch };
 			ch = 0;	
-		} 
-		
-		// add a newline if one is not in the message [fixme: what about continuations?]
-		//if( !text || !text.match( /\n$/ )) text += "\n";
+		}
 
 		doc.replaceRange( text, { line: start, ch: ch }, replace_end, "callback");
 		end = doc.lastLine();
