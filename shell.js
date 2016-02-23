@@ -130,13 +130,14 @@ var Shell = function( CodeMirror_, opts ){
 	/**
 	 * insert an arbitrary node, via CM's widget
 	 */
-	this.insert_node = function(node){
+	this.insert_node = function(node, scroll){
 
 		var doc = cm.getDoc();
 		var line = Math.max( doc.lastLine() - 1, 0 );
 		cm.addLineWidget( line, node, {
 			handleMouseEvents: true
 		});
+		if( scroll ) cm.scrollIntoView({line: line+1, ch: 0});
 
 	};
 
