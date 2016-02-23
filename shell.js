@@ -67,10 +67,12 @@ var Shell = function( CodeMirror_, opts ){
 	var state = EXEC_STATE.EDIT;
 	var prompt = "";
 	var instance = this;
+	
+	var prompted = false;
+	var prompt_len = 0;
 
 	var command_buffer = [];
 	var paste_buffer = [];
-	var blinking = true;
 
 	/**
 	 * FIXME: cap and flush this thing at (X) number of lines
@@ -156,15 +158,38 @@ var Shell = function( CodeMirror_, opts ){
 			}
 		};
 
-		// add a newline if one is not in the message [fixme: what about continuations?]
-		if( !text || !text.match( /\n$/ )) text += "\n";
+		// don't add newlines.  respect existing length.  this is so we 
+		// can handle \r (without a \n).  FIXME: if there's a prompt, go
+		// up one line.
+		
+		var lastline = doc.getLine(lineno);
+		var ch = lastline ? lastline.length : 0;
 
-		doc.replaceRange( text, { line: start, ch: 0 }, undefined, "callback");
+		// fix here in case there's already a prompt (this is a rare case?)
+
+		if( prompted ){
+			ch = 0;
+		}
+		
+		// TEMP only (shortcut)
+		var replace_end = undefined;
+		if( text.startsWith( "\r" )){
+			text = text.substring(1);
+			replace_end = { line: start, ch: ch };
+			ch = 0;	
+		} 
+		
+		// add a newline if one is not in the message [fixme: what about continuations?]
+		//if( !text || !text.match( /\n$/ )) text += "\n";
+
+		doc.replaceRange( text, { line: start, ch: ch }, replace_end, "callback");
 		end = doc.lastLine();
+		lastline = doc.getLine(end);
+		var endch = lastline.length;
 
 		// can specify class
 		if( className ){
-			doc.markText( { line: start, ch: 0 }, { line: end, ch: 0 }, {
+			doc.markText( { line: start, ch: ch }, { line: end, ch: endch }, {
 				className: className
 			});
 		}
@@ -172,7 +197,7 @@ var Shell = function( CodeMirror_, opts ){
 		// don't scroll in exec mode, on the theory that (1) we might get
 		// more messages, and (2) we'll scroll when we enter the caret
 		if( state !== EXEC_STATE.EXEC ){
-			cm.scrollIntoView({line: doc.lastLine(), ch: 0});
+			cm.scrollIntoView({line: doc.lastLine(), ch: endch});
 		}
 
 	};
@@ -194,7 +219,7 @@ var Shell = function( CodeMirror_, opts ){
 
 		var doc = cm.getDoc();
 		var lineno = doc.lastLine();
-		var line = doc.getLine( lineno ).substr(prompt.length);
+		var line = doc.getLine( lineno ).substr(prompt_len);
 
 		// capture current (see history class for note on soft persistence)
 		if( history.pointer == 0 ) history.current_line = line;
@@ -206,13 +231,13 @@ var Shell = function( CodeMirror_, opts ){
 
 		// at current, use our buffer
 		if( history.pointer == 0 ){
-			doc.replaceRange( history.current_line, { line: lineno, ch: prompt.length }, {line: lineno, ch: prompt.length + line.length }, "history");
+			doc.replaceRange( history.current_line, { line: lineno, ch: prompt_len }, {line: lineno, ch: prompt_len + line.length }, "history");
 		}
 		else {
 			var text = history.commands[ history.commands.length - history.pointer ];
 			doc.replaceRange( text,
-				{ line: lineno, ch: prompt.length },
-				{ line: lineno, ch: prompt.length + line.length }, "history");
+				{ line: lineno, ch: prompt_len },
+				{ line: lineno, ch: prompt_len + line.length }, "history");
 		}
 
 		var linelen = cm.getLine( lineno ).length;
@@ -246,7 +271,7 @@ var Shell = function( CodeMirror_, opts ){
 
 		state = EXEC_STATE.EXEC;
 
-		var command = line.substr(prompt.length);
+		var command = line.substr(prompt_len);
 		command_buffer.push(command);
 
 		// you can exec an empty line, but we don't put it into history.
@@ -265,6 +290,7 @@ var Shell = function( CodeMirror_, opts ){
 		history.reset_pointer();
 
 		if( instance.opts.exec_function ){
+			prompted = false;
 			instance.opts.exec_function.call( this, command_buffer, function(rslt){
 
 				state = EXEC_STATE.EDIT;
@@ -279,15 +305,20 @@ var Shell = function( CodeMirror_, opts ){
 				}
 
 				var lineno = cm.getDoc().lastLine();
-				doc.replaceRange( prompt, { line: lineno, ch: 0 }, undefined, "prompt");
-				doc.setSelection({ line: lineno, ch: prompt.length });
-				cm.scrollIntoView({line: lineno, ch: 0});
+				var lastline = cm.getLine(lineno);
+				
+				prompt_len = lastline.length + prompt.length;
+				
+				doc.replaceRange( prompt, { line: lineno, ch: lastline.length }, undefined, "prompt");
+				doc.setSelection({ line: lineno, ch: prompt_len });
+				cm.scrollIntoView({line: lineno, ch: prompt_len });
+				prompted = true;
 
 				if( paste_buffer.length ){
 					setImmediate( function(){
 						var text = paste_buffer[0];
 						paste_buffer.splice(0,1);
-						doc.replaceRange( text, { line: lineno, ch: prompt.length }, undefined, "paste-continuation");
+						doc.replaceRange( text, { line: lineno, ch: prompt_len }, undefined, "paste-continuation");
 						if( paste_buffer.length ){
 							exec_line(cm);
 						}
@@ -317,7 +348,7 @@ var Shell = function( CodeMirror_, opts ){
 	 * get shell width in chars.  not sure how CM gets this (possibly a dummy node?)
 	 */
 	this.get_width_in_chars = function(){
-		return Math.floor( this.opts.container.clientWidth / cm.defaultCharWidth());
+		return Math.floor( this.opts.container.clientWidth / cm.defaultCharWidth()) - instance.opts.initial_prompt.length;
 	};
 
 	/** refresh layout,  force on nonstandard resizes */
@@ -340,8 +371,8 @@ var Shell = function( CodeMirror_, opts ){
 		var index = doc.lastLine();
 		var line = doc.getLine(index);
 		var pos = cm.getCursor();
-		return { text: line.substr( prompt.length ),
-			pos: ( index == pos.line ? pos.ch - prompt.length : -1 )
+		return { text: line.substr( prompt_len ),
+			pos: ( index == pos.line ? pos.ch - prompt_len : -1 )
 		 };
 	};
 
@@ -405,7 +436,9 @@ var Shell = function( CodeMirror_, opts ){
 		});
 
 		prompt = opts.initial_prompt;
-		cm.getDoc().setSelection({ line: 0, ch: prompt.length });
+		prompt_len = prompt.length;
+		cm.getDoc().setSelection({ line: 0, ch: prompt_len });
+		prompted = true;
 
 		var local_hint_function = null;
 		if( opts.hint_function ){
@@ -414,7 +447,7 @@ var Shell = function( CodeMirror_, opts ){
 				var doc = cm.getDoc();
 				var line = doc.getLine(doc.lastLine());
 				var pos = cm.getCursor();
-				var plen = prompt.length;
+				var plen = prompt_len;
 
 				opts.hint_function.call( instance, line.substr(plen), pos.ch - plen, function( completions, position ){
 					if( !completions || !completions.length ){
@@ -433,7 +466,7 @@ var Shell = function( CodeMirror_, opts ){
 
 		cm.on( "cursorActivity", function(cm, e){
 			var pos = cm.getCursor();
-			if( pos.line !== cm.getDoc().lastLine() || pos.ch < prompt.length ){
+			if( pos.line !== cm.getDoc().lastLine() || pos.ch < prompt_len || !prompted ){
 				cm.setOption( "cursorBlinkRate", 0 );
 			}		
 			else cm.setOption( "cursorBlinkRate", 530 );
@@ -455,8 +488,8 @@ var Shell = function( CodeMirror_, opts ){
 						e.to.line = e.from.line = lastline;
 						e.from.ch = e.to.ch = doc.getLine( lastline ).length;
 					}
-					else if( e.from.ch < prompt.length ){
-						e.from.ch = e.to.ch = prompt.length;
+					else if( e.from.ch < prompt_len ){
+						e.from.ch = e.to.ch = prompt_len;
 					}
 				}
 				else if( e.origin && ( e.origin === "paste" )){
@@ -475,8 +508,8 @@ var Shell = function( CodeMirror_, opts ){
 						e.to.line = e.from.line = lastline;
 						e.from.ch = e.to.ch = doc.getLine( lastline ).length;
 					}
-					else if( e.from.ch < prompt.length ){
-						e.from.ch = e.to.ch = prompt.length;
+					else if( e.from.ch < prompt_len ){
+						e.from.ch = e.to.ch = prompt_len;
 					}
 
 					// after adjusting for position (above), we don't
@@ -532,7 +565,7 @@ var Shell = function( CodeMirror_, opts ){
 				if( pos.line < lineno ){
 					doc.setSelection({ line: lineno, ch: doc.getLine(lineno).length });
 				}
-				else if( pos.ch > prompt.length ){
+				else if( pos.ch > prompt_len ){
 					doc.setSelection({ line: lineno, ch: pos.ch-1 });
 				}
 			},
@@ -545,8 +578,8 @@ var Shell = function( CodeMirror_, opts ){
 				if( pos.line < lineno ){
 					doc.setCursor({ line: lineno, ch: doc.getLine(lineno).length });
 				}
-				else if( pos.ch < prompt.length ){
-					doc.setCursor({ line: lineno, ch: prompt.length });
+				else if( pos.ch < prompt_len ){
+					doc.setCursor({ line: lineno, ch: prompt_len });
 				}
 				else {
 					doc.setCursor({ line: lineno, ch: pos.ch+1 });
@@ -560,8 +593,8 @@ var Shell = function( CodeMirror_, opts ){
 				if( pos.line < lineno ){
 					doc.setCursor({ line: lineno, ch: doc.getLine(lineno).length });
 				}
-				else if( pos.ch <= prompt.length ){
-					doc.setCursor({ line: lineno, ch: prompt.length });
+				else if( pos.ch <= prompt_len ){
+					doc.setCursor({ line: lineno, ch: prompt_len });
 				}
 				else return CodeMirror_.Pass
 			},
@@ -573,8 +606,8 @@ var Shell = function( CodeMirror_, opts ){
 				if( pos.line < lineno ){
 					doc.setCursor({ line: lineno, ch: doc.getLine(lineno).length });
 				}
-				else if( pos.ch < prompt.length ){
-					doc.setCursor({ line: lineno, ch: prompt.length });
+				else if( pos.ch < prompt_len ){
+					doc.setCursor({ line: lineno, ch: prompt_len });
 				}
 				else {
 					return CodeMirror_.pass;
@@ -584,7 +617,7 @@ var Shell = function( CodeMirror_, opts ){
 
 			Home: function(cm){
 				var doc = cm.getDoc();
-				doc.setSelection({ line: doc.lastLine(), ch: prompt.length });
+				doc.setSelection({ line: doc.lastLine(), ch: prompt_len });
 			},
 
 			Tab: function(cm){
