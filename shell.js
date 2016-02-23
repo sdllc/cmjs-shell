@@ -68,7 +68,6 @@ var Shell = function( CodeMirror_, opts ){
 	var prompt = "";
 	var instance = this;
 	
-	var prompted = false;
 	var prompt_len = 0;
 
 	var command_buffer = [];
@@ -167,8 +166,9 @@ var Shell = function( CodeMirror_, opts ){
 
 		// fix here in case there's already a prompt (this is a rare case?)
 
-		if( prompted ){
-			ch = 0;
+		if( state != EXEC_STATE.EXEC ){
+			ch -= prompt_len;
+			if( ch < 0 ) ch = 0; // how can that happen?
 		}
 		
 		// TEMP only (shortcut)
@@ -196,9 +196,15 @@ var Shell = function( CodeMirror_, opts ){
 
 		// don't scroll in exec mode, on the theory that (1) we might get
 		// more messages, and (2) we'll scroll when we enter the caret
-		if( state !== EXEC_STATE.EXEC ){
+		//if( state !== EXEC_STATE.EXEC )
+		{
 			cm.scrollIntoView({line: doc.lastLine(), ch: endch});
 		}
+
+		// the problem with that is that it's annoying when you want to see 
+		// the messages (for long-running code, for example).
+	
+		
 
 	};
 
@@ -290,7 +296,6 @@ var Shell = function( CodeMirror_, opts ){
 		history.reset_pointer();
 
 		if( instance.opts.exec_function ){
-			prompted = false;
 			instance.opts.exec_function.call( this, command_buffer, function(rslt){
 
 				state = EXEC_STATE.EDIT;
@@ -312,7 +317,6 @@ var Shell = function( CodeMirror_, opts ){
 				doc.replaceRange( prompt, { line: lineno, ch: lastline.length }, undefined, "prompt");
 				doc.setSelection({ line: lineno, ch: prompt_len });
 				cm.scrollIntoView({line: lineno, ch: prompt_len });
-				prompted = true;
 
 				if( paste_buffer.length ){
 					setImmediate( function(){
@@ -438,7 +442,6 @@ var Shell = function( CodeMirror_, opts ){
 		prompt = opts.initial_prompt;
 		prompt_len = prompt.length;
 		cm.getDoc().setSelection({ line: 0, ch: prompt_len });
-		prompted = true;
 
 		var local_hint_function = null;
 		if( opts.hint_function ){
@@ -466,10 +469,18 @@ var Shell = function( CodeMirror_, opts ){
 
 		cm.on( "cursorActivity", function(cm, e){
 			var pos = cm.getCursor();
-			if( pos.line !== cm.getDoc().lastLine() || pos.ch < prompt_len || !prompted ){
+			var doc = cm.getDoc();
+			var lineno = doc.lastLine();
+			var lastline = doc.getLine( lineno );
+			if( pos.line !== lineno || pos.ch < prompt_len ){
 				cm.setOption( "cursorBlinkRate", 0 );
-			}		
-			else cm.setOption( "cursorBlinkRate", 530 );
+			}
+			else if( state == EXEC_STATE.EXEC 
+					&& pos.line === lineno 
+					&& pos.ch == lastline.length ){
+				cm.setOption( "cursorBlinkRate", -1 );
+			}
+			else cm.setOption( "cursorBlinkRate", 530 ); // CM default -- make an option?
 		});
 				
 		cm.on( "beforeChange", function(cm, e){
