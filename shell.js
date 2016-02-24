@@ -173,6 +173,7 @@ var Shell = function( CodeMirror_, opts ){
 		}
 
 		// second cut, a little more thorough
+		// one more patch, to stop breaking on windows CRLFs
 		
 		var lastindex, lines = text.split( "\n" );
 		var replace_end = undefined;
@@ -182,13 +183,17 @@ var Shell = function( CodeMirror_, opts ){
 		
 		for( var i = 0; i< lines.length; i++ ){
 			
-			lastindex = lines[i].lastIndexOf('\r');
+			var overwrite = lines[i].split( '\r' );
 			
 			if( i ) text += "\n";
-			else if( lastindex >= 0 ) inline_replacement = true;
+			else if( overwrite.length > 1 ) inline_replacement = true;
 			
-			if (lastindex >= 0 ) {
-				text += lines[i].substring( lastindex + 1 );
+			if (overwrite.length > 1 ) {
+				var final_text = "";
+				for( var j = overwrite.length - 1; j >= 0; j-- ){
+					final_text = final_text + overwrite[j].substring( final_text.length );
+				}
+				text += final_text;
 			}
 			else text += lines[i];
 		}
