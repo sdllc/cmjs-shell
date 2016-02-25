@@ -319,17 +319,29 @@ var Shell = function( CodeMirror_, opts ){
 		if( instance.opts.exec_function ){
 			instance.opts.exec_function.call( this, command_buffer, function(rslt){
 
-				state = EXEC_STATE.EDIT;
-				var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
+				// UPDATE: new style of return where the command processor 
+				// handles the multiline-buffer (specifically for R's debugger).
+				
+				// in that case, always clear command buffer and accept the prompt
+				// from the callback.
 
-				if( ps === PARSE_STATUS.INCOMPLETE ){
-					prompt = instance.opts.continuation_prompt;
+				state = EXEC_STATE.EDIT;
+				
+				if( rslt && rslt.prompt ){
+					command_buffer = [];
+					prompt = rslt.prompt;
 				}
 				else {
-					command_buffer = [];
-					prompt = instance.opts.initial_prompt;
+					var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
+					if( ps === PARSE_STATUS.INCOMPLETE ){
+						prompt = instance.opts.continuation_prompt;
+					}
+					else {
+						command_buffer = [];
+						prompt = instance.opts.initial_prompt;
+					}
 				}
-
+				
 				var lineno = cm.getDoc().lastLine();
 				var lastline = cm.getLine(lineno);
 				
