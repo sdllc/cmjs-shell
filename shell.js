@@ -44,6 +44,7 @@ var PARSE_STATUS = {
 const MAX_HISTORY_DEFAULT = 2500;
 
 const HISTORY_KEY_DEFAULT = "shell.history";
+const DEFAULT_PROMPT_CLASS = "shell-prompt";
 
 /**
  * shell implmentation based on CodeMirror (which is awesome)
@@ -65,7 +66,7 @@ var Shell = function( CodeMirror_, opts ){
 
 	var cm;
 	var state = EXEC_STATE.EDIT;
-	var prompt = "";
+	var prompt_text = "";
 	var instance = this;
 	
 	var prompt_len = 0;
@@ -278,6 +279,49 @@ var Shell = function( CodeMirror_, opts ){
 	}
 
 	/**
+	 * set prompt with optional class
+	 */
+	function set_prompt( text, prompt_class ){
+		
+		if( typeof prompt_class === "undefined" )
+			prompt_class = DEFAULT_PROMPT_CLASS;
+
+		if( typeof text === "undefined" ){
+			if( instance.opts ) prompt_text = instance.opts.default_prompt;
+			else text = "? " ;
+		}
+
+		prompt_text = text;	
+
+		var doc = cm.getDoc();				
+		var lineno = doc.lastLine();
+		var lastline = cm.getLine(lineno);
+				
+		prompt_len = lastline.length + prompt_text.length;
+				
+		doc.replaceRange( prompt_text, { line: lineno, ch: lastline.length }, undefined, "prompt" );
+		if( prompt_class ){
+			doc.markText( { line: lineno, ch: lastline.length }, { line: lineno, ch: prompt_len }, {
+				className: prompt_class
+			});
+		}
+				
+		doc.setSelection({ line: lineno, ch: prompt_len });
+		cm.scrollIntoView({line: lineno, ch: prompt_len });
+
+	}
+
+	/**
+	 * external function to set a prompt.  this is intended to be used with
+	 * a delayed startup, where there may be text echoed to the screen (and 
+	 * hence we need an initialized console) before we know what the correct
+	 * prompt is.
+	 */
+	this.prompt = function( text, className ){
+		set_prompt( text, className );	
+	};
+
+	/**
 	 * execute the current line.  this happens on enter as
 	 * well as on paste (in the case of paste, it might
 	 * get called multiple times -- once for each line in
@@ -329,28 +373,21 @@ var Shell = function( CodeMirror_, opts ){
 				
 				if( rslt && rslt.prompt ){
 					command_buffer = [];
-					prompt = rslt.prompt;
+					set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class );
 				}
 				else {
 					var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
 					if( ps === PARSE_STATUS.INCOMPLETE ){
-						prompt = instance.opts.continuation_prompt;
+						set_prompt( instance.opts.continuation_prompt );
 					}
 					else {
 						command_buffer = [];
-						prompt = instance.opts.initial_prompt;
+						set_prompt( instance.opts.initial_prompt );
 					}
 				}
 				
-				var lineno = cm.getDoc().lastLine();
-				var lastline = cm.getLine(lineno);
+				lineno = cm.getDoc().lastLine();
 				
-				prompt_len = lastline.length + prompt.length;
-				
-				doc.replaceRange( prompt, { line: lineno, ch: lastline.length }, undefined, "prompt");
-				doc.setSelection({ line: lineno, ch: prompt_len });
-				cm.scrollIntoView({line: lineno, ch: prompt_len });
-
 				if( paste_buffer.length ){
 					setImmediate( function(){
 						var text = paste_buffer[0];
@@ -466,16 +503,16 @@ var Shell = function( CodeMirror_, opts ){
 
 		// FIXME: this doesn't need to be global, if we can box it up then require() it
 		cm = CodeMirror_( function(elt){opts.container.appendChild( elt ); }, {
-			value: opts.initial_prompt,
+			value: "",
 			mode: opts.mode,
 			allowDropFileTypes: opts.drop_files,
 			viewportMargin: 100
 		});
 
-		prompt = opts.initial_prompt;
-		prompt_len = prompt.length;
-		cm.getDoc().setSelection({ line: 0, ch: prompt_len });
-
+		// if you suppress the initial prompt, you must call the "prompt" method 
+		
+		if( !opts.suppress_initial_prompt ) set_prompt( opts.initial_prompt );
+		
 		var local_hint_function = null;
 		if( opts.hint_function ){
 			local_hint_function = function( cm, callback ){
