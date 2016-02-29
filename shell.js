@@ -102,7 +102,7 @@ var Shell = function( CodeMirror_, opts ){
 			opts = opts || {};
 			var max = opts.max || MAX_HISTORY_DEFAULT;
 			var key = opts.key || HISTORY_KEY_DEFAULT;
-			localStorage.setItem( key, JSON.stringify( this.actual_commands.slice(0, max)));
+			localStorage.setItem( key, JSON.stringify( this.actual_commands.slice(-max)));
 		},
 		
 		restore: function(opts){
