@@ -73,6 +73,9 @@ var Shell = function( CodeMirror_, opts ){
 
 	var command_buffer = [];
 	var paste_buffer = [];
+	
+	var unstyled_lines = [];
+	var unstyled_flag = false;
 
 	/**
 	 * FIXME: cap and flush this thing at (X) number of lines
@@ -116,6 +119,100 @@ var Shell = function( CodeMirror_, opts ){
 
 	};
 
+	/**
+	 * overlay mode to support unstyled text, file contents (the pager)
+	 * in our particular case but could be anything.  this is based on 
+	 * CM's "overlay" mode, but that one doesn't work because it parses
+	 * regardless and we get stuck in string-mode after a stray apostrophe.
+	 * 
+	 * in this one, null styling is the default, and greedy; but if we are 
+	 * not unstyled, then we pass through to (base).  base should be a string
+	 * mode name, which must have been previously registered.
+	 */
+	function init_overlay_mode( CM, base, name ){
+		
+		CM.defineMode( name, function(config, parserConfig) {
+			base = CM.getMode( config, parserConfig.backdrop || base );
+			return {
+				
+				startState: function() {
+					return {
+						base: CM.startState(base),
+						linecount: 0
+					};
+				},
+				
+				copyState: function(state) {
+					return {
+						base: CM.copyState(base, state.base),
+						linecount: state.linecount
+					};
+				},
+
+				token: function(stream, state) {
+					if( stream.sol()){
+						var lc = state.linecount;
+						state.linecount++;
+						if( unstyled_flag || unstyled_lines[lc] ){
+							stream.skipToEnd();
+							return "unstyled";
+						}
+					}
+					return base.token(stream, state.base);
+					
+				},
+
+				indent: base.indent && function(state, textAfter) {
+					return base.indent(state.base, textAfter);
+				},
+				
+				electricChars: base.electricChars,
+
+				innerMode: function(state) { return {state: state.base, mode: base}; },
+
+				blankLine: function(state) {
+					state.linecount++;
+					if (base.blankLine) base.blankLine(state.base);
+				}
+				
+			};
+		});
+		
+		/*
+		CodeMirror_.defineMode("unstyled-overlay", function(config, parserConfig) {
+
+			var unstyledOverlay = {
+				startState: function(){
+					return { linecount: 0 };	
+				},
+
+				blankLine: function(state){
+					state.linecount++;
+				},
+
+				token: function(stream, state) {
+					if( stream.sol()){
+						stream.skipToEnd();
+						var lc = state.linecount;
+						state.linecount++;
+						if( unstyled_flag || unstyled_lines[lc] ){
+							console.info( "Checking line", lc, "UNSTYLED");
+							return "unstyled";
+						}
+						console.info( "Checking line", lc, "styled" );
+						return null;
+					}
+					console.info( " * NEVER * [cmjs-shell overlay mode]" );
+					stream.skipToEnd();
+					return null;
+				}
+			};
+			return CodeMirror_.overlayMode(CodeMirror_.getMode(config, parserConfig.backdrop || opts.mode ), unstyledOverlay);
+		});
+		*/
+	}
+	
+
 	this.setOption = function( option, value ){
 		console.info( "set option", option, value );
 		cm.setOption( option, value );
@@ -144,9 +241,10 @@ var Shell = function( CodeMirror_, opts ){
 
 	/**
 	 * handler for command responses, stuff that the system
-	 * sends to the shell (callbacks, generally)
+	 * sends to the shell (callbacks, generally).  unstyled
+	 * prevents language styling on the block.
 	 */
-	this.response = function(text, className){
+	this.response = function(text, className, unstyled){
 
 		var doc = cm.getDoc();
 		var lineno = doc.lastLine();
@@ -204,10 +302,21 @@ var Shell = function( CodeMirror_, opts ){
 			ch = 0;	
 		}
 
+		// for styling before we have built the table
+		if( unstyled ) unstyled_flag = true;
+
 		doc.replaceRange( text, { line: start, ch: ch }, replace_end, "callback");
 		end = doc.lastLine();
 		lastline = doc.getLine(end);
 		var endch = lastline.length;
+
+		if( unstyled ){
+			var u_end = end;
+			if( endch == 0 ) u_end--;
+			if( u_end >= start ){
+				for( var i = start; i<= u_end; i++ ) unstyled_lines[i] = 1;
+			}
+		}
 
 		// can specify class
 		if( className ){
@@ -226,7 +335,7 @@ var Shell = function( CodeMirror_, opts ){
 		// the problem with that is that it's annoying when you want to see 
 		// the messages (for long-running code, for example).
 	
-		
+		unstyled_flag = false;
 
 	};
 
@@ -415,6 +524,10 @@ var Shell = function( CodeMirror_, opts ){
 		if( lastline > 0 ){
 			doc.replaceRange( "", { line: 0, ch: 0 }, { line: lastline, ch: 0 });
 		}
+		
+		// reset unstyled 
+		unstyled_lines.splice(0, unstyled_lines.length);
+		unstyled_flag = false;
 
 	};
 
@@ -501,16 +614,21 @@ var Shell = function( CodeMirror_, opts ){
 			opts.container = document.querySelector(opts.container);
 		}
 
+		// special codemirror mode to support unstyled blocks (full lines only)
+		var modename = "unstyled-overlay";
+		init_overlay_mode( CodeMirror_, opts.mode, modename );
+		
 		// FIXME: this doesn't need to be global, if we can box it up then require() it
 		cm = CodeMirror_( function(elt){opts.container.appendChild( elt ); }, {
 			value: "",
-			mode: opts.mode,
+			mode: modename, // opts.mode,
 			allowDropFileTypes: opts.drop_files,
 			viewportMargin: 100
 		});
+window.cm = cm;
 
 		// if you suppress the initial prompt, you must call the "prompt" method 
-		
+	
 		if( !opts.suppress_initial_prompt ) set_prompt( opts.initial_prompt );
 		
 		var local_hint_function = null;
