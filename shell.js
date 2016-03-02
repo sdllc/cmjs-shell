@@ -120,7 +120,7 @@ var Shell = function( CodeMirror_, opts ){
 	};
 
 	/**
-	 * overlay mode to support unstyled text, file contents (the pager)
+	 * overlay mode to support unstyled text -- file contents (the pager)
 	 * in our particular case but could be anything.  this is based on 
 	 * CM's "overlay" mode, but that one doesn't work because it parses
 	 * regardless and we get stuck in string-mode after a stray apostrophe.
@@ -178,41 +178,9 @@ var Shell = function( CodeMirror_, opts ){
 			};
 		});
 		
-		/*
-		CodeMirror_.defineMode("unstyled-overlay", function(config, parserConfig) {
-
-			var unstyledOverlay = {
-				startState: function(){
-					return { linecount: 0 };	
-				},
-
-				blankLine: function(state){
-					state.linecount++;
-				},
-
-				token: function(stream, state) {
-					if( stream.sol()){
-						stream.skipToEnd();
-						var lc = state.linecount;
-						state.linecount++;
-						if( unstyled_flag || unstyled_lines[lc] ){
-							console.info( "Checking line", lc, "UNSTYLED");
-							return "unstyled";
-						}
-						console.info( "Checking line", lc, "styled" );
-						return null;
-					}
-					console.info( " * NEVER * [cmjs-shell overlay mode]" );
-					stream.skipToEnd();
-					return null;
-				}
-			};
-			return CodeMirror_.overlayMode(CodeMirror_.getMode(config, parserConfig.backdrop || opts.mode ), unstyledOverlay);
-		});
-		*/
 	}
 	
-
+	/** set CM option directly -- REMOVE */
 	this.setOption = function( option, value ){
 		console.info( "set option", option, value );
 		cm.setOption( option, value );
@@ -227,6 +195,8 @@ var Shell = function( CodeMirror_, opts ){
 
 	/**
 	 * insert an arbitrary node, via CM's widget
+	 * 
+	 * @param scroll -- scroll to the following line so the node is visible 
 	 */
 	this.insert_node = function(node, scroll){
 
@@ -241,8 +211,9 @@ var Shell = function( CodeMirror_, opts ){
 
 	/**
 	 * handler for command responses, stuff that the system
-	 * sends to the shell (callbacks, generally).  unstyled
-	 * prevents language styling on the block.
+	 * sends to the shell (callbacks, generally).  optional className is a
+	 * style applied to the block.  "unstyled", if set, prevents language 
+	 * styling on the block.
 	 */
 	this.response = function(text, className, unstyled){
 
@@ -274,7 +245,7 @@ var Shell = function( CodeMirror_, opts ){
 		// second cut, a little more thorough
 		// one more patch, to stop breaking on windows CRLFs
 		
-		var lastindex, lines = text.split( "\n" );
+		var lines = text.split( "\n" );
 		var replace_end = undefined;
 		var inline_replacement = false;
 		
@@ -625,7 +596,6 @@ var Shell = function( CodeMirror_, opts ){
 			allowDropFileTypes: opts.drop_files,
 			viewportMargin: 100
 		});
-window.cm = cm;
 
 		// if you suppress the initial prompt, you must call the "prompt" method 
 	
@@ -655,6 +625,21 @@ window.cm = cm;
 			local_hint_function.async = true;
 		}
 
+		cm.on( "cut", function( cm, e ){
+			if( state !== EXEC_STATE.EDIT ) e.preventDefault();
+			else {
+				var doc = cm.getDoc();
+				var start = doc.getCursor( "from" );
+				var end = doc.getCursor( "to" );
+				var line = doc.lastLine();
+				if( start.line !== line 
+					|| end.line !== line 
+					|| start.ch < prompt_len 
+					|| end.ch < prompt_len 
+					|| start.ch === end.ch ) e.preventDefault();
+			}
+		});
+
 		cm.on( "cursorActivity", function(cm, e){
 			var pos = cm.getCursor();
 			var doc = cm.getDoc();
@@ -677,12 +662,12 @@ window.cm = cm;
 			// paste with carets and exec in order (line-by-line)
 
 			if( e.origin ){
+				
+				var doc = cm.getDoc();
+				var lastline = doc.lastLine();
 
 				if( e.origin[0] === "+" ){
 					if( state === EXEC_STATE.EXEC ) e.cancel();
-
-					var doc = cm.getDoc();
-					var lastline = doc.lastLine();
 					if( e.from.line != lastline ){
 						e.to.line = e.from.line = lastline;
 						e.from.ch = e.to.ch = doc.getLine( lastline ).length;
@@ -691,13 +676,16 @@ window.cm = cm;
 						e.from.ch = e.to.ch = prompt_len;
 					}
 				}
-				else if( e.origin && ( e.origin === "paste" )){
-					if( state === EXEC_STATE.EXEC ) e.cancel();
-
-					// console.info( e );
-
-					var doc = cm.getDoc();
-					var lastline = doc.lastLine();
+				else if( e.origin === "undo" ){
+					if( state !== EXEC_STATE.EDIT ) e.cancel();
+					if( e.from.line !== lastline 
+						|| e.to.line !== lastline 
+						|| e.from.ch < prompt_len 
+						|| e.to.ch < prompt_len 
+						|| e.from.ch === e.to.ch ) e.cancel();
+				}
+				else if( e.origin === "paste" ){
+					if( state !== EXEC_STATE.EDIT ) e.cancel();
 
 					// text is split into multiple lines, which is handy.
 					// if the last line includes a carriage return, then
