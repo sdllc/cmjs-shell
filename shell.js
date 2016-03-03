@@ -77,6 +77,8 @@ var Shell = function( CodeMirror_, opts ){
 	var unstyled_lines = [];
 	var unstyled_flag = false;
 
+	var cached_prompt = null;
+
 	/**
 	 * FIXME: cap and flush this thing at (X) number of lines
 	 *
@@ -186,6 +188,72 @@ var Shell = function( CodeMirror_, opts ){
 		cm.setOption( option, value );
 	};
 
+	/** 
+	 * block.  this is used for operations called by the code, rather than 
+	 * the user -- we don't want the user to be able to run commands, because
+	 * they'll fail.
+	 */
+	this.block = function(message){
+
+		// this bit is right from exec:
+		
+		if( state === EXEC_STATE.EXEC ){
+			return false;
+		}
+
+		var doc = cm.getDoc();
+		var lineno = doc.lastLine();
+		var line = doc.getLine( lineno );
+
+		if( !message ) message = "\n";
+		else message = "\n" + message + "\n";
+
+		doc.replaceRange( message, { line: lineno+1, ch: 0 }, undefined, "prompt");
+		doc.setCursor({ line: lineno+1, ch: 0 });
+
+		state = EXEC_STATE.EXEC;
+
+		var command = line.substr(prompt_len);
+		command_buffer.push(command);
+
+		if( command.trim().length > 0 ){
+			history.push(command);
+			history.save(); // this is perhaps unecessarily aggressive
+		} 
+
+		// this automatically resets the pointer (NOT windows style)
+		history.reset_pointer();
+		
+		// now leave it in this state...
+		return true;
+		
+	};
+
+	/** unblock, should be symmetrical. */
+	this.unblock = function(rslt){
+
+		// again this is from exec (but we're skipping the
+		// bit about pasting)
+
+		state = EXEC_STATE.EDIT;
+				
+		if( rslt && rslt.prompt ){
+			command_buffer = [];
+			set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class );
+		}
+		else {
+			var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
+			if( ps === PARSE_STATUS.INCOMPLETE ){
+				set_prompt( instance.opts.continuation_prompt );
+			}
+			else {
+				command_buffer = [];
+				set_prompt( instance.opts.initial_prompt );
+			}
+		}
+		
+	};
+
 	/**
 	 * get history as array 
 	 */
@@ -207,6 +275,13 @@ var Shell = function( CodeMirror_, opts ){
 		});
 		if( scroll ) cm.scrollIntoView({line: line+1, ch: 0});
 
+	};
+
+	/**
+	 * select all -- this doesn't seem to work using the standard event... ?
+	 */
+	this.select_all = function(){
+		cm.execCommand( 'selectAll' );
 	};
 
 	/**
@@ -237,7 +312,7 @@ var Shell = function( CodeMirror_, opts ){
 
 		// fix here in case there's already a prompt (this is a rare case?)
 
-		if( state != EXEC_STATE.EXEC ){
+		if( state !== EXEC_STATE.EXEC ){
 			ch -= prompt_len;
 			if( ch < 0 ) ch = 0; // how can that happen?
 		}
@@ -409,7 +484,7 @@ var Shell = function( CodeMirror_, opts ){
 	 */
 	function exec_line( cm ){
 
-		if( state == EXEC_STATE.EXEC ){
+		if( state === EXEC_STATE.EXEC ){
 			return;
 		}
 
@@ -648,7 +723,7 @@ var Shell = function( CodeMirror_, opts ){
 			if( pos.line !== lineno || pos.ch < prompt_len ){
 				cm.setOption( "cursorBlinkRate", 0 );
 			}
-			else if( state == EXEC_STATE.EXEC 
+			else if( state === EXEC_STATE.EXEC 
 					&& pos.line === lineno 
 					&& pos.ch == lastline.length ){
 				cm.setOption( "cursorBlinkRate", -1 );
