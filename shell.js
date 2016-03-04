@@ -563,7 +563,7 @@ var Shell = function( CodeMirror_, opts ){
 	 * clear console. two things to note: (1) this does not work in
 	 * exec state. (2) preserves last line, which we assume is a prompt/command.
 	 */
-	this.clear = function(){
+	this.clear = function(focus){
 
 		var doc = cm.getDoc();
 		var lastline = doc.lastLine();
@@ -574,7 +574,14 @@ var Shell = function( CodeMirror_, opts ){
 		// reset unstyled 
 		unstyled_lines.splice(0, unstyled_lines.length);
 		unstyled_flag = false;
+		
+		// move cursor to edit position 
+		var text = doc.getLine( doc.lastLine());
+		doc.setSelection({ line: doc.lastLine(), ch: text.length });
 
+		// optionally focus		
+		if( focus ) this.focus();
+		
 	};
 
 	/**
