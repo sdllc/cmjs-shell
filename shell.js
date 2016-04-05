@@ -639,6 +639,42 @@ var Shell = function( CodeMirror_, opts ){
 	this.focus = function(){ cm.focus(); };
 
 	/**
+	 * show function tip
+	 */
+	this.show_function_tip = function( text ){
+		
+		if( !this.function_tip ) this.function_tip = {};
+		if( text === this.function_tip.cached_tip ) return;
+		var where = cm.cursorCoords();
+		this.function_tip.cached_tip = text;
+		if( !this.function_tip.node ){
+			this.function_tip.container_node = document.createElement( "div" );
+			this.function_tip.container_node.className = "cmjs-shell-function-tip-container";
+			this.function_tip.node = document.createElement( "div" );
+			this.function_tip.node.className = "cmjs-shell-function-tip";
+			this.function_tip.container_node.appendChild( this.function_tip.node );
+			opts.container.appendChild(this.function_tip.container_node);
+		}
+		this.function_tip.visible = true;
+		this.function_tip.node.innerHTML = text;
+
+		// the container/child lets you relatively position the tip in css
+		this.function_tip.container_node.setAttribute( "style", "top: " + where.top + "px; left: " + where.left + "px;" );
+		this.function_tip.container_node.classList.add( "visible" );
+	};
+
+	/**
+	 * hide function tip
+	 */
+	this.hide_function_tip = function( user ){
+		if( !this.function_tip ) return;
+		if( !user ) this.function_tip.cached_tip = null;
+		if( this.function_tip.visible ){
+			this.function_tip.container_node.classList.remove( "visible" );
+		}
+	};
+
+	/**
 	 * constructor body
 	 */
 	(function(){
@@ -738,6 +774,15 @@ var Shell = function( CodeMirror_, opts ){
 			else cm.setOption( "cursorBlinkRate", 530 ); // CM default -- make an option?
 		});
 				
+		cm.on( "change", function( cm, e ){
+			if( e.origin[0] === "+" ){
+				var doc = cm.getDoc();
+				var lastline = doc.lastLine();
+				if( opts.tip_function ) opts.tip_function( doc.getLine( lastline ), e.from.ch + e.text.length );
+			}
+			else console.info( e.origin );
+		});
+				
 		cm.on( "beforeChange", function(cm, e){
 
 			// todo: split paste into separate lines,
@@ -818,6 +863,7 @@ var Shell = function( CodeMirror_, opts ){
 			Down: function(cm){ shell_history( false );},
 
 			Esc: function(cm){
+				instance.hide_function_tip( true );
 				opts.function_key_callback( 'esc' );
 			},
 
