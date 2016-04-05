@@ -775,7 +775,7 @@ var Shell = function( CodeMirror_, opts ){
 		});
 				
 		cm.on( "change", function( cm, e ){
-			if( e.origin[0] === "+" ){
+			if( e.origin && e.origin[0] === "+" ){
 				var doc = cm.getDoc();
 				var lastline = doc.lastLine();
 				if( opts.tip_function ) opts.tip_function( doc.getLine( lastline ), e.from.ch + e.text.length );
