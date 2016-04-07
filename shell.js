@@ -184,7 +184,7 @@ var Shell = function( CodeMirror_, opts ){
 	
 	/** set CM option directly -- REMOVE */
 	this.setOption = function( option, value ){
-		console.info( "set option", option, value );
+		if( opts.debug ) console.info( "set option", option, value );
 		cm.setOption( option, value );
 	};
 
@@ -687,7 +687,7 @@ var Shell = function( CodeMirror_, opts ){
 
 		// dummy functions
 		opts.exec_function = opts.exec_function || function( cmd, callback ){
-			console.info( "DUMMY" );
+			if( opts.debug ) console.info( "DUMMY" );
 			var ps = PARSE_STATUS.OK;
 			var err = null;
 			if( cmd.length ){
@@ -780,7 +780,9 @@ var Shell = function( CodeMirror_, opts ){
 				var lastline = doc.lastLine();
 				if( opts.tip_function ) opts.tip_function( doc.getLine( lastline ), e.from.ch + e.text.length );
 			}
-			else console.info( e.origin );
+			else {
+				instance.hide_function_tip( true );
+			}
 		});
 				
 		cm.on( "beforeChange", function(cm, e){
