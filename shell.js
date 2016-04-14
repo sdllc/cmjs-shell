@@ -482,7 +482,7 @@ var Shell = function( CodeMirror_, opts ){
 	 * get called multiple times -- once for each line in
 	 * the paste).
 	 */
-	function exec_line( cm ){
+	function exec_line( cm, cancel ){
 
 		if( state === EXEC_STATE.EXEC ){
 			return;
@@ -496,9 +496,17 @@ var Shell = function( CodeMirror_, opts ){
 		doc.setCursor({ line: lineno+1, ch: 0 });
 
 		state = EXEC_STATE.EXEC;
+		var command;
 
-		var command = line.substr(prompt_len);
-		command_buffer.push(command);
+		if( cancel ){
+			command = "";
+			command_buffer = [command];
+		}
+		else {
+			command = line.substr(prompt_len);
+			command_buffer.push(command);
+			
+		}
 
 		// you can exec an empty line, but we don't put it into history.
 		// the container can just do nothing on an empty command, if it
@@ -600,7 +608,7 @@ var Shell = function( CodeMirror_, opts ){
 	 * cancel the current line; clear parse buffer and reset history.
 	 */
 	this.cancel = function(){
-
+		exec_line( cm, true );
 	};
 
 	/**
