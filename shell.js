@@ -672,15 +672,19 @@ var Shell = function( CodeMirror_, opts ){
 	};
 
 	/**
-	 * hide function tip
+	 * hide function tip.  
+	 * 
+	 * @return true if we consumed the event, or false
 	 */
 	this.hide_function_tip = function( user ){
-		if( !this.function_tip ) return;
+		if( !this.function_tip ) return false;
 		if( !user ) this.function_tip.cached_tip = null;
 		if( this.function_tip.visible ){
 			this.function_tip.container_node.classList.remove( "visible" );
 			this.function_tip.visible = false;
+			return true;
 		}
+		return false;
 	};
 
 	/**
@@ -874,8 +878,11 @@ var Shell = function( CodeMirror_, opts ){
 			Down: function(cm){ shell_history( false );},
 
 			Esc: function(cm){
-				instance.hide_function_tip( true );
-				opts.function_key_callback( 'esc' );
+				
+				// don't pass through if we consume it
+
+				if( !instance.hide_function_tip( true ))
+					opts.function_key_callback( 'esc' );
 			},
 
 			F3: function(cm){
