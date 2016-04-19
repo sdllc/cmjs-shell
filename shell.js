@@ -679,6 +679,7 @@ var Shell = function( CodeMirror_, opts ){
 		if( !user ) this.function_tip.cached_tip = null;
 		if( this.function_tip.visible ){
 			this.function_tip.container_node.classList.remove( "visible" );
+			this.function_tip.visible = false;
 		}
 	};
 
