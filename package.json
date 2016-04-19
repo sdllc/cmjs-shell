@@ -1,6 +1,6 @@
 {
 	"name": "cmjs-shell",
-	"version": "0.2.20",
+	"version": "0.2.21",
 	"license": "MIT",
 	"description": "Command shell based on CodeMirror.",
 	"keywords": ["shell", "console"],
