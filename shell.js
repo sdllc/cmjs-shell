@@ -75,8 +75,9 @@ var Shell = function( CodeMirror_, opts ){
 	var paste_buffer = [];
 	
 	var unstyled_lines = [];
+	var block_reset = [];
+	
 	var unstyled_flag = false;
-
 	var cached_prompt = null;
 
 	/**
@@ -159,6 +160,9 @@ var Shell = function( CodeMirror_, opts ){
 							stream.skipToEnd();
 							return "unstyled";
 						}
+						if( block_reset[lc] ){
+							state.base = CM.startState(base);
+						}
 					}
 					return base.token(stream, state.base);
 					
@@ -239,12 +243,12 @@ var Shell = function( CodeMirror_, opts ){
 				
 		if( rslt && rslt.prompt ){
 			command_buffer = [];
-			set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class );
+			set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class, rslt.continuation );
 		}
 		else {
 			var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
 			if( ps === PARSE_STATUS.INCOMPLETE ){
-				set_prompt( instance.opts.continuation_prompt );
+				set_prompt( instance.opts.continuation_prompt, undefined, true );
 			}
 			else {
 				command_buffer = [];
@@ -436,7 +440,7 @@ var Shell = function( CodeMirror_, opts ){
 	/**
 	 * set prompt with optional class
 	 */
-	function set_prompt( text, prompt_class ){
+	function set_prompt( text, prompt_class, is_continuation ){
 		
 		if( typeof prompt_class === "undefined" )
 			prompt_class = DEFAULT_PROMPT_CLASS;
@@ -463,6 +467,8 @@ var Shell = function( CodeMirror_, opts ){
 				
 		doc.setSelection({ line: lineno, ch: prompt_len });
 		cm.scrollIntoView({line: lineno, ch: prompt_len });
+		
+		if( !is_continuation ) block_reset[lineno] = 1;
 
 	}
 
@@ -472,8 +478,8 @@ var Shell = function( CodeMirror_, opts ){
 	 * hence we need an initialized console) before we know what the correct
 	 * prompt is.
 	 */
-	this.prompt = function( text, className ){
-		set_prompt( text, className );	
+	this.prompt = function( text, className, is_continuation ){
+		set_prompt( text, className, is_continuation );	
 	};
 
 	/**
@@ -536,12 +542,12 @@ var Shell = function( CodeMirror_, opts ){
 				
 				if( rslt && rslt.prompt ){
 					command_buffer = [];
-					set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class );
+					set_prompt( rslt.prompt || instance.opts.initial_prompt, rslt.prompt_class, rslt.continuation );
 				}
 				else {
 					var ps = rslt ? rslt.parsestatus || PARSE_STATUS.OK : PARSE_STATUS.NULL;
 					if( ps === PARSE_STATUS.INCOMPLETE ){
-						set_prompt( instance.opts.continuation_prompt );
+						set_prompt( instance.opts.continuation_prompt, undefined, true );
 					}
 					else {
 						command_buffer = [];
@@ -582,6 +588,8 @@ var Shell = function( CodeMirror_, opts ){
 		// reset unstyled 
 		unstyled_lines.splice(0, unstyled_lines.length);
 		unstyled_flag = false;
+
+		block_reset.splice(0, block_reset.length);
 		
 		// move cursor to edit position 
 		var text = doc.getLine( doc.lastLine());
