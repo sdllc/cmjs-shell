@@ -455,6 +455,8 @@ var Shell = function( CodeMirror_, opts ){
 		var doc = cm.getDoc();				
 		var lineno = doc.lastLine();
 		var lastline = cm.getLine(lineno);
+
+		if( !is_continuation ) block_reset[lineno] = 1;
 				
 		prompt_len = lastline.length + prompt_text.length;
 				
@@ -467,8 +469,6 @@ var Shell = function( CodeMirror_, opts ){
 				
 		doc.setSelection({ line: lineno, ch: prompt_len });
 		cm.scrollIntoView({line: lineno, ch: prompt_len });
-		
-		if( !is_continuation ) block_reset[lineno] = 1;
 
 	}
 
