@@ -314,19 +314,35 @@ var Shell = function( CodeMirror_, opts ){
 		var lastline = doc.getLine(lineno);
 		var ch = lastline ? lastline.length : 0;
 
-		// fix here in case there's already a prompt (this is a rare case?)
-
-		if( state !== EXEC_STATE.EXEC ){
-			ch -= prompt_len;
-			if( ch < 0 ) ch = 0; // how can that happen?
-		}
-
 		// second cut, a little more thorough
 		// one more patch, to stop breaking on windows CRLFs
 		
 		var lines = text.split( "\n" );
 		var replace_end = undefined;
 		var inline_replacement = false;
+
+		// fix here in case there's already a prompt (this is a rare case?)
+
+		if( state !== EXEC_STATE.EXEC ){
+			
+			ch -= prompt_len;
+			if( ch < 0 ) ch = 0; // how can that happen?
+			
+			// this is new: in the event that there is already a prompt,
+			// and we are maintaining styling "breaks", then we may
+			// need to offset the last break by some number of lines.
+			
+			// actually we know it's only going to be the last one, so
+			// we can skip the loop.
+			
+			if( lines.length > 1 && block_reset.length ){
+				var blast = block_reset.length - 1 ;
+				block_reset[ blast ] = undefined;
+				block_reset[ blast + lines.length - 1 ] = 1;
+			}
+			
+		}
+
 		
 		text = "";
 		
