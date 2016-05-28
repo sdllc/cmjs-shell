@@ -80,6 +80,10 @@ var Shell = function( CodeMirror_, opts ){
 	var unstyled_flag = false;
 	var cached_prompt = null;
 
+	var event_cache = null;
+	var event_cache_skip = false;
+	var event_playback = false;
+
 	/**
 	 * FIXME: cap and flush this thing at (X) number of lines
 	 *
@@ -192,6 +196,62 @@ var Shell = function( CodeMirror_, opts ){
 		cm.setOption( option, value );
 	};
 
+	/** cache events if we're blocking */
+	var cacheEvent = function(event){
+		if( event_cache && !event_playback ){
+			if( event_cache_skip ){
+				if( event.type === "keyup" && event.key === "Enter" )
+					event_cache_skip = false;
+			}
+			else {
+				event_cache.push( event );
+			}
+		}
+	};
+
+	/** 
+	 * when unblocking (exiting an explicit block or exec),
+	 * replay cached keyboard events.  in some cases a played-back
+	 * event may trigger execution, which turns caching back on.
+	 * in that case, stop processing and dump all the 
+	 * original source events back into the cache. 
+	 */
+	var playbackEvents = function(){
+	
+		// flush cache.  set to null to act as flag
+		
+		var tmp = event_cache;
+		event_cache = null;
+		event_cache_skip = false;
+		
+		if( tmp && tmp.length ){
+			
+			var inputTarget = instance.cm.getInputField(); 
+			tmp.forEach( function( src ){
+
+				if( event_cache ){
+					cacheEvent( src );
+					return;
+				}
+
+				var event = new KeyboardEvent( src.type, src );
+				Object.defineProperties( event, {
+					charCode: { get: function(){ return src.charCode; }},
+					which: { get: function(){ return src.which; }},
+					keyCode: { get: function(){ return src.keyCode; }}, 
+					key: { get: function(){ return src.key; }},     
+					char: { get: function(){ return src.char; }},
+					target: { get: function(){ return src.target; }}
+				});
+				event_playback = true;
+				inputTarget.dispatchEvent( event );
+				event_playback = false;
+				
+			});
+		}
+		
+	};
+
 	/** 
 	 * block.  this is used for operations called by the code, rather than 
 	 * the user -- we don't want the user to be able to run commands, because
@@ -227,14 +287,17 @@ var Shell = function( CodeMirror_, opts ){
 
 		// this automatically resets the pointer (NOT windows style)
 		history.reset_pointer();
-		
+
+		// turn on event caching
+		event_cache = [];
+	
 		// now leave it in this state...
 		return true;
 		
 	};
 
 	/** unblock, should be symmetrical. */
-	this.unblock = function(rslt){
+	this.unblock = function( rslt, ignore_cached_events ){
 
 		// again this is from exec (but we're skipping the
 		// bit about pasting)
@@ -255,6 +318,8 @@ var Shell = function( CodeMirror_, opts ){
 				set_prompt( instance.opts.initial_prompt );
 			}
 		}
+		
+		if( !ignore_cached_events ) playbackEvents();
 		
 	};
 
@@ -546,6 +611,13 @@ var Shell = function( CodeMirror_, opts ){
 		history.reset_pointer();
 
 		if( instance.opts.exec_function ){
+			
+			// turn on event caching.  if we're being called 
+			// from a paste block, it might already be in place
+			// so don't destroy it.
+			
+			if( !event_cache ) event_cache = [];
+
 			instance.opts.exec_function.call( this, command_buffer, function(rslt){
 
 				// UPDATE: new style of return where the command processor 
@@ -583,7 +655,12 @@ var Shell = function( CodeMirror_, opts ){
 						}
 					});
 				}
-
+				else {
+					setImmediate( function(){
+						playbackEvents();
+					});
+				}
+				
 			});
 		}
 
@@ -747,10 +824,18 @@ var Shell = function( CodeMirror_, opts ){
 		// FIXME: this doesn't need to be global, if we can box it up then require() it
 		cm = CodeMirror_( function(elt){opts.container.appendChild( elt ); }, {
 			value: "",
+			inputStyle: "contenteditable",
 			mode: modename, // opts.mode,
 			allowDropFileTypes: opts.drop_files,
 			viewportMargin: 100
 		});
+
+		var inputfield = cm.getInputField();
+
+		inputfield.addEventListener( "keydown", cacheEvent );
+		inputfield.addEventListener( "keyup", cacheEvent );
+		inputfield.addEventListener( "keypress", cacheEvent );
+		inputfield.addEventListener( "char", cacheEvent );
 
 		// if you suppress the initial prompt, you must call the "prompt" method 
 	
@@ -898,23 +983,40 @@ var Shell = function( CodeMirror_, opts ){
 		cm.setOption("extraKeys", {
 
 			// command history
-			Up: function(cm){ shell_history( true ); },
-			Down: function(cm){ shell_history( false );},
+			Up: function(cm){ 
+				if( event_cache ) return;
+
+				shell_history( true ); 
+			},
+			Down: function(cm){ 
+				if( event_cache ) return;
+
+				shell_history( false );
+			},
 
 			Esc: function(cm){
 				
-				// don't pass through if we consume it
-
-				if( !instance.hide_function_tip( true ))
+				if( event_cache ){
 					opts.function_key_callback( 'esc' );
+					event_cache = [];
+				}
+				else {
+					// don't pass through if we consume it
+					if( !instance.hide_function_tip( true ))
+						opts.function_key_callback( 'esc' );
+				}
 			},
 
 			F3: function(cm){
+				if( event_cache ) return;
+
 				opts.function_key_callback( 'f3' );
 			},
 
 			// keep in bounds
 			Left: function(cm){
+				if( event_cache ) return;
+
 				var pos = cm.getCursor();
 				var doc = cm.getDoc();
 				var lineno = doc.lastLine();
@@ -928,6 +1030,8 @@ var Shell = function( CodeMirror_, opts ){
 			},
 
 			Right: function(cm){
+				if( event_cache ) return;
+
 				var pos = cm.getCursor();
 				var doc = cm.getDoc();
 				var lineno = doc.lastLine();
@@ -944,6 +1048,8 @@ var Shell = function( CodeMirror_, opts ){
 			},
 
 			'Ctrl-Left': function(cm){
+				if( event_cache ) return;
+
 				var pos = cm.getCursor();
 				var doc = cm.getDoc();
 				var lineno = doc.lastLine();
@@ -957,6 +1063,8 @@ var Shell = function( CodeMirror_, opts ){
 			},
 
 			'Ctrl+Right': function(cm){
+				if( event_cache ) return;
+				
 				var pos = cm.getCursor();
 				var doc = cm.getDoc();
 				var lineno = doc.lastLine();
@@ -973,11 +1081,15 @@ var Shell = function( CodeMirror_, opts ){
 			},
 
 			Home: function(cm){
+				if( event_cache ) return;
+				
 				var doc = cm.getDoc();
 				doc.setSelection({ line: doc.lastLine(), ch: prompt_len });
 			},
 
 			Tab: function(cm){
+				if( event_cache ) return;
+				
 				if( opts.hint_function ){
 
 					// we're treating this slightly differently by passing only
@@ -993,6 +1105,8 @@ var Shell = function( CodeMirror_, opts ){
 
 			// exec
 			Enter: function(cm) {
+				if( event_cache ) return;
+				event_cache_skip = true;	
 				exec_line( cm );
 			}
 
