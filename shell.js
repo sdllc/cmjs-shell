@@ -906,7 +906,18 @@ var Shell = function( CodeMirror_, opts ){
 				instance.hide_function_tip( true );
 			}
 		});
-				
+
+		// notification listener for CM scroll event,
+		// which may be more useful that normal scroll event
+		if( opts.scroll ){
+			cm.on( "scroll", opts.scroll );
+		}
+		
+		// notification listener for CM viewport change event
+		if( opts.viewport_change ){
+			cm.on( "viewportChange", opts.viewport_change );
+		};
+			
 		cm.on( "beforeChange", function(cm, e){
 
 			// todo: split paste into separate lines,
