@@ -121,7 +121,14 @@ var Shell = function( CodeMirror_, opts ){
 			var val = localStorage.getItem(key);
 			if( val ) this.actual_commands = JSON.parse( val );
 			this.reset_pointer();
-		}
+		},
+
+        clear: function(){
+            this.actual_commands = [];
+            this.commands = [];
+            this.pointer = 0;
+            this.save();
+        }
 		
 
 	};
@@ -190,6 +197,11 @@ var Shell = function( CodeMirror_, opts ){
 		
 	}
 	
+    /** destructively clear all history */
+    this.clearHistory = function(){
+        history.clear();
+    };
+
 	/** set CM option directly -- REMOVE */
 	this.setOption = function( option, value ){
 		if( opts.debug ) console.info( "set option", option, value );
