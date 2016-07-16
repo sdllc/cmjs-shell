@@ -238,8 +238,6 @@ var Shell = function( CodeMirror_, opts ){
 		
 		if( tmp && tmp.length ){
 			
-			console.info( "instance?", instance );
-			
 			var inputTarget = cm.getInputField(); 
 			tmp.forEach( function( src ){
 
