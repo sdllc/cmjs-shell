@@ -211,7 +211,7 @@ var Shell = function( CodeMirror_, opts ){
 	/** get CM option directly -- REMOVE */
 	this.getOption = function( option ){
 		if( opts.debug ) console.info( "get option", option );
-		cm.getOption( option );
+		return cm.getOption( option );
 	};
 
 	/** cache events if we're blocking */
