@@ -208,6 +208,12 @@ var Shell = function( CodeMirror_, opts ){
 		cm.setOption( option, value );
 	};
 
+	/** get CM option directly -- REMOVE */
+	this.getOption = function( option ){
+		if( opts.debug ) console.info( "get option", option );
+		cm.getOption( option );
+	};
+
 	/** cache events if we're blocking */
 	var cacheEvent = function(event){
 		if( event_cache && !event_playback ){
@@ -844,7 +850,7 @@ var Shell = function( CodeMirror_, opts ){
 			inputStyle: "contenteditable",
 			mode: modename, // opts.mode,
 			allowDropFileTypes: opts.drop_files,
-			viewportMargin: 100
+			viewportMargin: 50
 		});
 
 		var inputfield = cm.getInputField();
