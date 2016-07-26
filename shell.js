@@ -841,17 +841,21 @@ var Shell = function( CodeMirror_, opts ){
 		}
 
 		// special codemirror mode to support unstyled blocks (full lines only)
-		var modename = "unstyled-overlay";
+		let modename = "unstyled-overlay";
 		init_overlay_mode( CodeMirror_, opts.mode, modename );
 		
-		// FIXME: this doesn't need to be global, if we can box it up then require() it
-		cm = CodeMirror_( function(elt){opts.container.appendChild( elt ); }, {
+        // remove default to inputStyle -> contenteditable.  CM seems to be 
+        // checking for key existence, so undefined doesn't work.  add if necessary.
+        let cm_opts = {
 			value: "",
-			inputStyle: "contenteditable",
 			mode: modename, // opts.mode,
 			allowDropFileTypes: opts.drop_files,
 			viewportMargin: 50
-		});
+        };
+        if( opts.inputStyle ) cm_opts.inputStyle = opts.inputStyle;
+
+		// FIXME: this doesn't need to be global, if we can box it up then require() it
+		cm = CodeMirror_( function(elt){opts.container.appendChild( elt ); }, cm_opts );
 
 		var inputfield = cm.getInputField();
 
