@@ -408,9 +408,8 @@ var Shell = function( CodeMirror_, opts ){
 
 		if( state !== EXEC_STATE.EXEC ){
 			
-			ch -= prompt_len;
-			if( ch < 0 ) ch = 0; // how can that happen?
-			
+            ch = 0; // insert before anything else on line
+
 			// this is new: in the event that there is already a prompt,
 			// and we are maintaining styling "breaks", then we may
 			// need to offset the last break by some number of lines.
