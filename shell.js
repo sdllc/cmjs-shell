@@ -202,6 +202,14 @@ var Shell = function( CodeMirror_, opts ){
         history.clear();
     };
 
+  /** 
+   * get the CM object.  necessary for some clients
+   * to handle events.  FIXME -- pass through events.
+   */
+	this.getCM = function(){
+    return cm;
+  };
+
 	/** set CM option directly -- REMOVE */
 	this.setOption = function( option, value ){
 		if( opts.debug ) console.info( "set option", option, value );
