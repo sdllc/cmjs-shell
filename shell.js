@@ -588,6 +588,16 @@ var Shell = function( CodeMirror_, opts ){
 		set_prompt( text, className, is_continuation );	
 	};
 
+  /**
+   * for external client that wants to execute a block of code with
+   * side effects -- as if the user had typed it in.
+   */
+  this.execute_block = function( code ){
+    let lines = code.split( /\n/g );
+    paste_buffer = paste_buffer.concat( lines );
+    exec_line( cm );
+  };
+
 	/**
 	 * execute the current line.  this happens on enter as
 	 * well as on paste (in the case of paste, it might
